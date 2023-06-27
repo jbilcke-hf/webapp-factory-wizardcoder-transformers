@@ -46,7 +46,10 @@ To install those dependencies, first you should create and activate a new virtua
 python -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
+pip install torch
 ```
+
+Note: the Dockerfile will install pytorch itself
 
 Then install the dependencies in it:
 ```bash
