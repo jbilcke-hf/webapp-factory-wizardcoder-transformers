@@ -58,13 +58,10 @@ RUN pip install -r requirements.txt
 
 COPY --chown=user . .
 
-# temporary skip model download, to make things faster
-RUN git clone https://huggingface.co/WizardLM/WizardCoder-15B-V1.0
-
 # help Pythonia by giving it the path to Python
 ENV PYTHON_BIN /usr/bin/python3
 
-RUN python3 test.py
+RUN python3 download-model.py
 
 # CMD [ "npm", "run", "start" ]
 CMD [ "npm", "run", "test" ]

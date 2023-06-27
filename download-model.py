@@ -31,7 +31,7 @@ def evaluate(instruction, tokenizer, model):
     output = tokenizer.decode(s[0], skip_special_tokens=True)
     return output.split("### Response:")[1].strip()
 
-base_model = "./models/WizardCoder-15B-V1.0"
+base_model = "WizardLM/WizardCoder-15B-V1.0"
 load_8bit = False
 
 print("loading tokenizer..")

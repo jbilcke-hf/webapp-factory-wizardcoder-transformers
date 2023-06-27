@@ -1,40 +1,78 @@
 import path from "node:path"
 import { python } from "pythonia"
 
-const transformers = await python('transformers')
-const { AutoGPTQForCausalLM, BaseQuantizeConfig } = await python ('auto_gptq')
+const torch = await python('torch')
+const sys = await python('sys')
+const { AutoTokenizer, AutoModelForCausalLM } = await python ('transformers')
 
-const modelName = "TheBloke/WizardCoder-15B-1.0-GPTQ"
+let device = await torch.cuda.is_available() ? 'cuda' : 'cpu'
 
-const use_triton = false // no NVIDIA Triton Inference Server
+try {
+  if (await torch.backends.mps.is_available()) {
+    device = 'mps'
+  }
+} catch (_err) {
+}
 
-const tokenizer = await transformers.AutoTokenizer.from_pretrained$(modelName, { use_fast: true })
+console.log('device: ' + device)
 
-const model = await AutoGPTQForCausalLM.from_quantized$(modelName, {
-  use_safetensors: true,
-  device: 'cuda:0',
-  use_triton: false,
-  quantize_config: null
+const baseModel = "WizardLM/WizardCoder-15B-V1.0"
+const load8bit = false
+
+let model = null
+
+console.log("loading tokenizer..")
+const tokenizer = AutoTokenizer.from_pretrained(baseModel)
+if (device == "cuda") {
+  model = await AutoModelForCausalLM.from_pretrained$(
+    baseModel, {
+    load_in_8bit: load8bit,
+    torch_dtype: torch.float16,
+    device_map: "auto",
+  })
+} else if (device == "mps") {
+  model = await AutoModelForCausalLM.from_pretrained(
+    baseModel, {
+    device_map: {"": device},
+    torch_dtype: torch.float16,
+  })
+}
+
+console.log("loaded tokenizer")
+
+model.config.pad_token_id = tokenizer.pad_token_id
+if (!load8bit) {
+  await model.half()
+}
+
+console.log("calling model.eval()")
+await model.eval()
+
+if (torch.__version__ >= "2" && sys.platform != "win32") {
+  console.log("calling torch.compile(model)")
+  model = await torch.compile(model)
+}
+
+console.log("calling evaluate..")
+
+const prompt = `Below is an instruction that describes a task.
+Write a response that appropriately completes the request.
+
+### Instruction:
+Write a short summary about AI.
+
+### Response:`
+const inputs = await tokenizer(
+  prompt, {
+  return_tensors: "pt",
+  truncation: true,
+  padding: true
 })
+const input_ids = await inputs["input_ids"].to(device)
 
-// Prevent printing spurious transformers error when using pipeline with AutoGPTQ
-await transformers.logging.set_verbosity(transformers.logging.CRITICAL)
 
-const pipe = await transformers.pipeline$("text-generation", { model, tokenizer })
-
-const query = "How do I sort a list in Python?"
-const prompt = `<|system|>\n<|end|>\n<|user|>\n${query}<|end|>\n<|assistant|>`
-
-//  We use a special <|end|> token with ID 49155 to denote ends of a turn
-const outputs = await pipe({
-  prompt,
-  max_new_tokens: 256,
-  do_sample: true,
-  temperature: 0.2,
-  top_k: 50,
-  top_p: 0.95,
-  eos_token_id: 49155
-})
-
-// You can sort a list in Python by using the sort() method. Here's an example:\n\n```\nnumbers = [3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5]\nnumbers.sort()\nprint(numbers)\n```\n\nThis will sort the list in place and print the sorted list.
-console.log(outputs[0]['generated_text'])
+await torch.no_grad()
+const generated = await model.generate(input_ids)
+const s = generated
+const output = await tokenizer.decode$(generated[0], { skip_special_tokens: true })
+console.log('output: ', output)
