@@ -19,6 +19,8 @@ try:
 except:
     pass
 
+print("device: " + device)
+
 base_model = "./models/WizardCoder-15B-V1.0"
 load_8bit = False
 
