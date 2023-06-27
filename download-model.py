@@ -43,12 +43,13 @@ if device == "cuda":
         torch_dtype=torch.float16,
         device_map="auto",
     )
-elif device == "mps":
+else:
     model = AutoModelForCausalLM.from_pretrained(
         base_model,
         device_map={"": device},
         torch_dtype=torch.float16,
     )
+
 print("loaded tokenizer")
 model.config.pad_token_id = tokenizer.pad_token_id
 if not load_8bit:
